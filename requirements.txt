@@ -1,1 +1,2 @@
 -e .
+python-dotenv==0.10.5

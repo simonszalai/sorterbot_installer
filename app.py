@@ -2,15 +2,22 @@
 
 import os
 from aws_cdk import core
+from dotenv import load_dotenv
 
-from sorterbot_installer.sorterbot_installer_stack import SorterbotInstallerStack
+from sorterbot_installer.sorterbot_dev_stack import SorterBotDevStack
+from sorterbot_installer.sorterbot_prod_stack import SorterBotProdStack
 
-
-os.environ["AWS_ACCESS_KEY_ID"] = "AKIAIWYAS7FTOHZ32C2Q"
-os.environ["AWS_SECRET_ACCESS_KEY"] = "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"
 
 app = core.App()
-env = core.Environment(account="537539036361", region="eu-central-1")
-SorterbotInstallerStack(app, "sorterbot-installer", env=env)
+
+if os.getenv("MODE") == "production":
+    load_dotenv(".env.prod")
+elif os.getenv("MODE") == "development":
+    load_dotenv(".env.dev")
+else:
+    raise Exception("No environment variable specifies deployment mode! Set MODE to 'development' or 'production'!")
+
+SorterBotDevStack(app, "sorterbot-dev", env=core.Environment(account=os.getenv("AWS_ACCOUNT_ID"), region=os.getenv("AWS_REGION")))
+SorterBotProdStack(app, "sorterbot-prod", env=core.Environment(account=os.getenv("AWS_ACCOUNT_ID"), region=os.getenv("AWS_REGION")))
 
 app.synth()
