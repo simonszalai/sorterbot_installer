@@ -1,8 +1,11 @@
+import random
+import string
 from aws_cdk import (
     core,
     aws_s3 as s3,
     aws_ec2 as ec2,
-    aws_rds as rds
+    aws_rds as rds,
+    aws_ssm as ssm
 )
 
 
@@ -47,7 +50,9 @@ class SorterBotDevStack(core.Stack):
 
         # ====================================== S3 ======================================
         # Create S3 bucket
-        s3.Bucket(self, "sorterbot", bucket_name="sorterbot", removal_policy=core.RemovalPolicy.DESTROY)
+        sorterbot_bucket_name = f"sorterbot-{''.join(random.choice(string.ascii_lowercase) for i in range(8))}"
+        ssm.StringParameter(self, "sorterbot_bucket_name", string_value=sorterbot_bucket_name, parameter_name="SORTERBOT_BUCKET_NAME")
+        s3.Bucket(self, sorterbot_bucket_name, bucket_name=sorterbot_bucket_name, removal_policy=core.RemovalPolicy.DESTROY)
 
 
         # ====================================== RDS ======================================
