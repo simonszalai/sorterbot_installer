@@ -1,58 +1,32 @@
+# SorterBot Installer
 
-# Welcome to your CDK Python project!
+This is the root repository for the SorterBot project, where you can find instructions to set up a development environment, as well as directions to deploy the solution to AWS. The project consists of the following repositories:
 
-This is a blank project for Python development with CDK.
+- **SorterBot Installer**: Current repository, automates setup for development and deployment to AWS.
+- **[SorterBot Cloud](https://github.com/simonszalai/sorterbot_cloud)**: Handles compute heavy tasks, it can be deployed to an AWS ECS cluster.
+- **[SorterBot Control](https://github.com/simonszalai/sorterbot_control)**: A Django app, which serves as a central control panel, it communicates with the Raspberry Pis, SorterBot Cloud, and the PostgreSQL database.
+- **[SorterBot Raspberry](https://github.com/simonszalai/sorterbot_raspberry)**: Python script to be executed on the Raspberry Pis to record data and execute commands.
+- **[SorterBot LabelTool](https://github.com/simonszalai/sorterbot_labeltool)**: Labeling tools written in Python to speed up training dataset creation.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## Development
+There are two options to set up a development environment: *local* and *aws-dev*. 
 
-This project is set up like a standard Python project.  The initialization
-process also creates a virtualenv within this project, stored under the .env
-directory.  To create the virtualenv it assumes that there is a `python3`
-(or `python` for Windows) executable in your path with access to the `venv`
-package. If for any reason the automatic creation of the virtualenv fails,
-you can create the virtualenv manually.
+### Local
+In *local* mode, the solution can be run without any AWS resources. Even without Internet, as long as the Raspberry Pis are connected to the same local network. To set up the development environment, follow the steps below:
 
-To manually create a virtualenv on MacOS and Linux:
-
-```
-$ python3 -m venv .env
-```
-
-After the init process completes and the virtualenv is created, you can use the following
-step to activate your virtualenv.
-
-```
-$ source .env/bin/activate
-```
-
-If you are a Windows platform, you would activate the virtualenv like this:
-
-```
-% .env\Scripts\activate.bat
-```
-
-Once the virtualenv is activated, you can install the required dependencies.
-
-```
-$ pip install -r requirements.txt
-```
-
-At this point you can now synthesize the CloudFormation template for this code.
-
-```
-$ cdk synth
-```
-
-To add additional dependencies, for example other CDK libraries, just add
-them to your `setup.py` file and rerun the `pip install -r requirements.txt`
-command.
-
-## Useful commands
-
- * `cdk ls`          list all stacks in the app
- * `cdk synth`       emits the synthesized CloudFormation template
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk docs`        open CDK documentation
-
-Enjoy!
+1. Install [Git LFS](https://git-lfs.github.com/) in case you don't have it installed.
+1. Clone the SorterBot Installer, Cloud and Control repositories:
+    ```
+    git clone git@github.com:simonszalai/sorterbot_installer.git
+    git clone git@github.com:simonszalai/sorterbot_cloud.git
+    git clone git@github.com:simonszalai/sorterbot_control.git
+    ```
+1. You will need a PostgreSQL database. You can connect to any database, either one deployed to a cloud provider or on localhost. To start a PostgreSQL instance as a Docker image on your local computer, follow these steps:
+    1. Download and run a PostgreSQL image from Docker Hub. In the command below, change [ANY_NAME] to a name of your choice, and [SECRET_PASSWORD] to a password, that later you will use as part of the connection string.
+        ```
+        docker run --name [ANY_NAME] -e POSTGRES_PASSWORD=[SECRET_PASSWORD] -d postgres:11
+        ```
+   1. After your postgres instance started, run `docker ps`, and copy the CONTAINER ID of the Docker container that runs your database.
+   1. Run `docker inspect [CONTAINER ID]`, and in the output, find `NetworkSettings.Networks.bridge.IPAddress`. This will be the host in your connection string. The password will be what you specified above, the port is the default, `5432`, and the username and dbname are both `postgres`. Based on these information, you will be able to construct the connection string in the next step.
+1. Follow the instructions under *Run SorterBot Control locally* in the [SorterBot Control](https://github.com/simonszalai/sorterbot_control) repository's README. Run the Docker image in *local* mode.
+1. Follow the instructions under *Run SorterBot Cloud locally* in the [SorterBot Cloud](https://github.com/simonszalai/sorterbot_cloud) repository's README. Run the Docker image in *local* mode.
