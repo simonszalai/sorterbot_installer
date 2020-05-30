@@ -30,3 +30,30 @@ In *local* mode, the solution can be run without any AWS resources. Even without
    1. Run `docker inspect [CONTAINER ID]`, and in the output, find `NetworkSettings.Networks.bridge.IPAddress`. This will be the host in your connection string. The password will be what you specified above, the port is the default, `5432`, and the username and dbname are both `postgres`. Based on these information, you will be able to construct the connection string in the next step.
 1. Follow the instructions under *Run SorterBot Control locally* in the [SorterBot Control](https://github.com/simonszalai/sorterbot_control) repository's README. Run the Docker image in *local* mode.
 1. Follow the instructions under *Run SorterBot Cloud locally* in the [SorterBot Cloud](https://github.com/simonszalai/sorterbot_cloud) repository's README. Run the Docker image in *local* mode.
+
+### aws-dev
+To develop in *aws-dev* mode, you need to create an S3 bucket and an RDS PostgreSQL instance. You can do that conveniently by running the *deploy_dev* script in the *scripts* folder. The script will provision an S3 bucket, an RDS instance, and a VPC, which is needed for the RDS instance. Since S3 bucket names has to be unique within a partition (which virtually means globally), a random string is appended to the bucket name, then the resulting name is saved in the SSM parameter store. The connection string for the RDS instance is also saved there.
+
+1. Install [AWS CLI Version 2](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) and [Node](https://nodejs.org/en/download/) in case you don't have them on your machine.
+1. Install AWS CDK with `npm install -g aws-cdk`
+1. To initialize the AWS CDK, execute the following commands (has to be done only once):
+    ```
+    # Create a virtual environment
+    python3 -m venv .env
+
+    # Activate the virtualenv
+    source .env/bin/activate
+
+    # Install dependencies
+    pip3 install -r requirements.txt
+    ```
+
+1. To deploy these resources, you need to configure AWS credentials. Since deployment has to be done only once, for simplicity's sake, create a root key pair in AWS Console, then run `aws configure` and provide the values in the interactive shell. After the deployment is complete, you can deactivate your key pair in AWS Console and/or remove them from your *~/.aws* folder.
+
+1. To deploy the dev resources, in the *scripts* folder, run:
+    ```
+    ./deploy_dev.sh
+    ```
+    In case you don't have execute permissions on the file, you can add it with `chmod +x deploy_dev.sh`
+
+1. If you want to delete these resources from AWS, run the script `./destroy_dev.sh`. If you have some files in you S3 bucket, the bucket won't be deleted. To delete the bucket with all of it's contents, run `./wipe_data.sh`
