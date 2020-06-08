@@ -1,4 +1,5 @@
 # SorterBot Installer
+*Note: This repository is still work in progress!*
 
 This is the root repository for the SorterBot project, where you can find instructions to set up a development environment, as well as directions to deploy the solution to AWS. The project consists of the following repositories:
 
