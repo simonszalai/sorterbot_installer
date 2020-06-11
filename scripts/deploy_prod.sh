@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Stop on any error
+set -e
+
 # Construct script path from script file location
 SCRIPT_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 
@@ -9,14 +12,16 @@ mkdir -p $SCRIPT_PATH/variables
 # Load .env.prod
 source $SCRIPT_PATH/../.env.prod
 
-# Stop on any error
-set -e
-
 # Set deployment mode
 export MODE=production
 
+# Retrieve default profile's region
+export DEPLOY_REGION=$(aws configure get region)
+
+# Set custom weights URL
+export WEIGHTS_URL="none"
+
 # Save aws configure default profile's region to SSM
-DEPLOY_REGION=$(aws configure get region)
 aws ssm put-parameter --name "DEPLOY_REGION" --value $DEPLOY_REGION --type "String" > /dev/null
 echo "DEPLOY_REGION was successfully saved to SSM parameter store."
 
@@ -48,11 +53,18 @@ aws iam attach-user-policy --policy-arn $POLICY_ARN --user-name GitHubActionUser
 ACCESS_KEY_OUT=$(aws iam create-access-key --user-name GitHubActionUser)
 
 # Set secrets for GitHub Actions
-python3 $SCRIPT_PATH/../utils/set_github_secret.py $GITHUB_TOKEN AWS_ACCESS_KEY_ID $ACCESS_KEY_OUT | jq '.AccessKey.AccessKeyId'
-python3 $SCRIPT_PATH/../utils/set_github_secret.py $GITHUB_TOKEN AWS_SECRET_ACCESS_KEY $ACCESS_KEY_OUT | jq '.AccessKey.SecretAccessKey'
+python3 $SCRIPT_PATH/../utils/set_github_secret.py $GITHUB_TOKEN AWS_ACCESS_KEY_ID $(echo $ACCESS_KEY_OUT | jq '.AccessKey.AccessKeyId' | tr -d '["]')
+python3 $SCRIPT_PATH/../utils/set_github_secret.py $GITHUB_TOKEN AWS_SECRET_ACCESS_KEY $(echo $ACCESS_KEY_OUT | jq '.AccessKey.SecretAccessKey' | tr -d '["]')
+
+# Save parameters as secrets for GitHub Actions
+python3 $SCRIPT_PATH/../utils/set_github_secret.py $GITHUB_TOKEN DEPLOY_REGION $DEPLOY_REGION
+python3 $SCRIPT_PATH/../utils/set_github_secret.py $GITHUB_TOKEN WEIGHTS_URL $WEIGHTS_URL
 
 # Deploy CloudFormation Stack
 cdk deploy sorterbot-prod --require-approval never
+
+# Upload model weights to S3
+# aws s3 cp $SCRIPT_PATH/.. s3://my-bucket/
 
 # Retrieve newly created RDS instance host
 postgresHost=$(aws rds describe-db-instances --filters "Name=db-instance-id,Values=sorterbot-postgres" --query "DBInstances[*].Endpoint.Address" --output text)
@@ -86,49 +98,46 @@ echo "EC2 Instance DNS is retrieved."
 ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "bash -s -- uno" < $SCRIPT_PATH/setup_control_panel.sh
 echo "EC2 setup complete."
 
-# Create empty .env file so docker-compose doesn't fail
-ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "touch sorterbot_control/sbc_server/.env"
-
 # Set region as environemnt variable
 ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "export DEPLOY_REGION=$DEPLOY_REGION"
 
-# Build Docker image then start Docker Compose
-ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "docker build -t sorterbot_control:latest sorterbot_control; cd sorterbot_control; EXT_PORT=80 MODE=production MIGRATE=1 docker-compose up"
+# Build Docker image
+ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS " \
+    docker build \
+        --build-arg MODE_ARG=production \
+        --build-arg DEPLOY_REGION_ARG=$DEPLOY_REGION \
+        --build-arg RESOURCE_SUFFIX_ARG=$(< $SCRIPT_PATH/variables/RESOURCE_SUFFIX) \
+        -t sorterbot_control:latest sorterbot_control; \
+"
 
-# Set Django password as environment variable on the EC2 instance
-ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "export DJANGO_SUPERUSER_PASSWORD=$2"
-
-# Install requirements so Django manage.py can be run outside Docker container
+# Install requirements so Django manage.py can be run outside Docker container (in order to avoid using password as a build argument, as it shows up in the logs)
 ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "sudo pip3 install -r sorterbot_control/sbc_server/requirements.txt"
+
+# Run Django migrations
+ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS " \
+    DEPLOY_REGION=$DEPLOY_REGION MODE=production python3 sorterbot_control/sbc_server/manage.py makemigrations \
+"
+ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS " \
+    DEPLOY_REGION=$DEPLOY_REGION MODE=production python3 sorterbot_control/sbc_server/manage.py migrate \
+"
 
 # Create Django superuser
 ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "\
     DEPLOY_REGION=$DEPLOY_REGION \
+    DJANGO_SUPERUSER_PASSWORD=$DJANGO_SUPERUSER_PASSWORD \
     MODE=production \
-    python3 sorterbot_control/sbc_server/manage.py createsuperuser --username $1 --email blank@email.com --noinput \
+    python3 sorterbot_control/sbc_server/manage.py createsuperuser --username $DJANGO_USER --email blank@email.com --noinput \
 "
 
-# Collect static files and host them on S3
-ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "MODE=production python3 sorterbot_control/sbc_server/manage.py collectstatic --noinput"
+# Create a release on GitHub to start the CI pipeline
+curl -v -i -X POST \
+    -H "Content-Type:application/json" \
+    -H "Authorization: token $GITHUB_TOKEN" \
+    "https://api.github.com/repos/${GITHUB_USER}/sorterbot_cloud/releases" \
+    -d '{"tag_name": "'$1'", "target_commitish": "master"}' > /dev/null
 
-# =================== Provide neccessary permissions to EC2 Instance by assigning an Instance Profile ===================
-# Create Role
-aws iam create-role --role-name SorterBotControlRoleProd --assume-role-policy-document file://policies/SorterBotControlAssumePolicy.json > /dev/null
+# Start docker-compose in background
+ssh -o "StrictHostKeyChecking no" -i ~/.aws/ssh_sorterbot_ec2.pem ec2-user@$PUBLIC_DNS "EXT_PORT=80 MODE=production DEPLOY_REGION=$DEPLOY_REGION docker-compose -f sorterbot_control/docker-compose.yml up -d"
 
-# Get SorterBotControlPolicyProd ARN
-CONTROL_POLICY_ARN=$(aws iam list-policies --query 'Policies[?PolicyName==`SorterBotControlPolicyProd`]' | jq '.[0].Arn' | tr -d '["]')
-
-# Attach Policy to Role
-aws iam attach-role-policy --policy-arn $CONTROL_POLICY_ARN --role-name SorterBotControlRoleProd > /dev/null
-
-# Create Instance Profile
-aws iam create-instance-profile --instance-profile-name SorterBotInstanceProfile > /dev/null
-
-# Add Policy to Instance Profile
-aws iam add-role-to-instance-profile --role-name SorterBotControlRoleProd --instance-profile-name SorterBotInstanceProfile
-
-# Get Instance Profile - EC2 Instance association ID
-ASSOC_ID=$(aws ec2 describe-iam-instance-profile-associations | jq '.IamInstanceProfileAssociations[0].AssociationId' | tr -d '["]')
-
-# Replace automatically assigned Instance Profile with existing one
-aws ec2 replace-iam-instance-profile-association --association-id $ASSOC_ID --iam-instance-profile Name=SorterBotInstanceProfile
+echo "GitHub Action triggered to deploy SorterBot Cloud to AWS ECS. Please allow ~15 minutes for the workflow to complete."
+echo "SorterBot Control Panel is online, you can log in here: ${PUBLIC_DNS}"

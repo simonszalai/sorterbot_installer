@@ -1,4 +1,11 @@
-import os
+"""
+CloudFormation stack that includes every resource needed for the whole SorterBot project to run in production.
+
+"""
+
+import string
+import random
+from pathlib import Path
 from aws_cdk import (
     core,
     aws_s3 as s3,
@@ -15,6 +22,11 @@ class SorterBotProdStack(core.Stack):
     def __init__(self, scope, id, **kwargs):
         super().__init__(scope, id, **kwargs)
 
+        # Create random string to be used as suffix on some resource names
+        resource_suffix = ''.join(random.choice(string.ascii_lowercase) for i in range(8))
+
+        # Save it as SSM parameter to be used in runtime
+        ssm.StringParameter(self, "RESOURCE_SUFFIX", string_value=resource_suffix, parameter_name="RESOURCE_SUFFIX")
 
         # ====================================== VPC ======================================
         # Create VPC
@@ -63,30 +75,38 @@ class SorterBotProdStack(core.Stack):
 
 
         # ====================================== IAM ======================================
-        # Create IAM roles
-        cloud_role = iam.Role(
+        cloud_role = iam.CfnRole(
             self,
-            "sorterbotCloudRole",
-            assumed_by=iam.ServicePrincipal('ecs.amazonaws.com'),
-            role_name="sorterbotCloudRole",
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess"),
-                iam.ManagedPolicy.from_managed_policy_arn(
-                    self,
-                    "sorterbotAmazonECSTaskExecutionRolePolicy",
-                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-                ),
+            "SorterBotCloudRole",
+            role_name="SorterBotCloudRole",
+            assume_role_policy_document={
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "ecs-tasks.amazonaws.com"
+                        },
+                        "Action": "sts:AssumeRole"
+                    }
+                ]
+            },
+            managed_policy_arns=[
+                "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+                "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
             ]
         )
 
         # Create IAM policies
-        secrets_for_ECS_policy = iam.ManagedPolicy(
+        iam.ManagedPolicy(
             self,
-            "sorterbotSecretsForECSPolicy",
-            managed_policy_name="sorterbotSecretsForECSPolicy",
+            "SorterBotSecretsForECSPolicy",
+            managed_policy_name="SorterBotSecretsForECSPolicy",
             roles=[cloud_role],
             statements=[
                 iam.PolicyStatement(resources=["*"], actions=[
+                    "ssm:GetParameter",
                     "ssm:GetParameters",
                     "secretsmanager:GetSecretValue",
                     "kms:Decrypt"
@@ -95,16 +115,28 @@ class SorterBotProdStack(core.Stack):
         )
 
         # ====================================== S3 ======================================
-        # Create S3 bucket
-        s3.Bucket(self, "sorterbot", bucket_name="sorterbot", removal_policy=core.RemovalPolicy.DESTROY)
-        s3.Bucket(self, "sorterbot-static", bucket_name="sorterbot-static", removal_policy=core.RemovalPolicy.DESTROY)
+        # Create S3 buckets
+        s3.Bucket(self, f"sorterbot-{resource_suffix}", bucket_name=f"sorterbot-{resource_suffix}", removal_policy=core.RemovalPolicy.DESTROY)
+        s3.Bucket(self, f"sorterbot-weights-{resource_suffix}", bucket_name=f"sorterbot-weights-{resource_suffix}", removal_policy=core.RemovalPolicy.DESTROY)
+        s3.Bucket(
+            self,
+            f"sorterbot-static-{resource_suffix}",
+            bucket_name=f"sorterbot-static-{resource_suffix}",
+            removal_policy=core.RemovalPolicy.DESTROY,
+            cors=[s3.CorsRule(
+                allowed_methods=[s3.HttpMethods.GET],
+                allowed_origins=["*"],
+                allowed_headers=["*"]
+            )]
+        )
+
 
         # ====================================== EC2 ======================================
         # Create EC2 instance for Control Panel
         control_panel_instance = ec2.Instance(
             self,
-            "sorterbot-control-panel",
-            instance_name="sorterbot-control-panel",
+            f"sorterbot-control-panel-{resource_suffix}",
+            instance_name=f"sorterbot-control-panel-{resource_suffix}",  # Since deleted instances stay around for a while in terminated state, random suffix is needed to prevent errors when destroying stack # noqa: E501
             instance_type=ec2.InstanceType("t2.micro"),
             machine_image=ec2.MachineImage.latest_amazon_linux(generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2),
             vpc=vpc,
@@ -174,3 +206,7 @@ class SorterBotProdStack(core.Stack):
             service_name="sorterbot-ecs-service",
             desired_count=0
         )
+
+        # Save resource suffix to disk to be used when destroying
+        with open(Path(__file__).parents[1].joinpath("scripts", "variables", "RESOURCE_SUFFIX"), "w") as outfile:
+            outfile.write(resource_suffix)

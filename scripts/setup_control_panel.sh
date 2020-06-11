@@ -33,3 +33,6 @@ sudo service docker start
 
 # Add current user to the Docker group
 sudo usermod -a -G docker ec2-user
+
+# Create empty .env file so docker-compose doesn't fail
+touch sorterbot_control/sbc_server/.env

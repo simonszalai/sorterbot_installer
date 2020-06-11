@@ -11,5 +11,4 @@ __pycache__
 .cdk.staging
 cdk.out
 
-PG_CONN
-PG_PASS
+scripts/variables

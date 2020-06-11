@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+"""
+Main CDK file, which deploys the production or development stack, depending on the MODE environment variable.
+
+"""
+
 import os
 from aws_cdk import core
 from dotenv import load_dotenv
@@ -17,7 +22,10 @@ elif os.getenv("MODE") == "development":
 else:
     raise Exception("No environment variable specifies deployment mode! Set MODE to 'development' or 'production'!")
 
-SorterBotDevStack(app, "sorterbot-dev", env=core.Environment(account=os.getenv("AWS_ACCOUNT_ID"), region=os.getenv("AWS_REGION")))
-SorterBotProdStack(app, "sorterbot-prod", env=core.Environment(account=os.getenv("AWS_ACCOUNT_ID"), region=os.getenv("AWS_REGION")))
+dev_stack = SorterBotDevStack(app, "sorterbot-dev", env=core.Environment(account=os.getenv("AWS_ACCOUNT_ID"), region=os.getenv("DEPLOY_REGION")))
+prod_stack = SorterBotProdStack(app, "sorterbot-prod", env=core.Environment(account=os.getenv("AWS_ACCOUNT_ID"), region=os.getenv("DEPLOY_REGION")))
+
+core.Tag.add(dev_stack, "SorterBotResource", "development")
+core.Tag.add(prod_stack, "SorterBotResource", "production")
 
 app.synth()

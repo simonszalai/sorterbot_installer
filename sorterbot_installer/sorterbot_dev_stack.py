@@ -1,5 +1,11 @@
+"""
+CloudFormation stack to deploy the resources needed for `aws-dev` development mode.
+
+"""
+
 import random
 import string
+from pathlib import Path
 from aws_cdk import (
     core,
     aws_s3 as s3,
@@ -12,6 +18,16 @@ from aws_cdk import (
 class SorterBotDevStack(core.Stack):
     def __init__(self, scope, id, **kwargs):
         super().__init__(scope, id, **kwargs)
+
+        # Create random string to be used as suffix on some resource names
+        resource_suffix = ''.join(random.choice(string.ascii_lowercase) for i in range(8))
+
+        # Save it as SSM parameter to be used in runtime
+        ssm.StringParameter(self, "RESOURCE_SUFFIX", string_value=resource_suffix, parameter_name="RESOURCE_SUFFIX")
+
+        # Save it to disk to be used when destroying
+        with open(Path(__file__).parents[1].joinpath("scripts", "variables", "RESOURCE_SUFFIX"), "w") as outfile:
+            outfile.write(resource_suffix)
 
 
         # ====================================== VPC ======================================
@@ -50,9 +66,7 @@ class SorterBotDevStack(core.Stack):
 
         # ====================================== S3 ======================================
         # Create S3 bucket
-        sorterbot_bucket_name = f"sorterbot-{''.join(random.choice(string.ascii_lowercase) for i in range(8))}"
-        ssm.StringParameter(self, "sorterbot_bucket_name", string_value=sorterbot_bucket_name, parameter_name="SORTERBOT_BUCKET_NAME")
-        s3.Bucket(self, sorterbot_bucket_name, bucket_name=sorterbot_bucket_name, removal_policy=core.RemovalPolicy.DESTROY)
+        s3.Bucket(self, f"sorterbot-{resource_suffix}", bucket_name=f"sorterbot-{resource_suffix}", removal_policy=core.RemovalPolicy.DESTROY)
 
 
         # ====================================== RDS ======================================

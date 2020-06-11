@@ -1,2 +1,4 @@
 -e .
 python-dotenv==0.10.5
+requests==2.23.0
+PyNaCl==1.4.0
