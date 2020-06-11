@@ -1,4 +1,5 @@
 # SorterBot Installer
+*Note: This repository is still work in progress!*
 
 This is the root repository for the SorterBot project, where you can find instructions to set up a development environment, as well as directions to deploy the solution to AWS. The project consists of the following repositories:
 
@@ -57,3 +58,6 @@ To develop in *aws-dev* mode, you need to create an S3 bucket and an RDS Postgre
     In case you don't have execute permissions on the file, you can add it with `chmod +x deploy_dev.sh`
 
 1. If you want to delete these resources from AWS, run the script `./destroy_dev.sh`. If you have some files in you S3 bucket, the bucket won't be deleted. To delete the bucket with all of it's contents, run `./wipe_data.sh`
+
+## Production
+Coming soon
