@@ -11,7 +11,8 @@ This is the root repository for the SorterBot project, where you can find instru
 
 ## Architecture
 The diagram below illustrates how different parts of the solution communicate with each other:
-![Alt SorterBot Communication Diagram](./media/comm_diagram.svg)
+
+![Alt SorterBot Communication Diagram](./media/communication_diagram.svg)
 *<p align="center">Figure 1: Communication Diagram of the SorterBot solution ([Full Diagram](https://www.figma.com/file/mOvLbEX2hGPtj6XftA14UP/SorterBot-Messaging?node-id=0%3A1))</p>*
 
 ## Development
