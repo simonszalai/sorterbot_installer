@@ -19,7 +19,7 @@ export MODE=production
 export DEPLOY_REGION=$(aws configure get region)
 
 # Set custom weights URL
-export WEIGHTS_URL="none"
+export WEIGHTS_URL=""
 
 # Save aws configure default profile's region to SSM
 aws ssm put-parameter --name "DEPLOY_REGION" --value $DEPLOY_REGION --type "String" > /dev/null
