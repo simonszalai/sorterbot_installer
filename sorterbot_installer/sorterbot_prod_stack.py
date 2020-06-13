@@ -204,7 +204,8 @@ class SorterBotProdStack(core.Stack):
             task_definition=task_definition,
             assign_public_ip=True,
             service_name="sorterbot-ecs-service",
-            desired_count=0
+            desired_count=0,
+            security_group=sg_vpc
         )
 
         # Save resource suffix to disk to be used when destroying
