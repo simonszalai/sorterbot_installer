@@ -66,4 +66,26 @@ To develop in *aws-dev* mode, you need to create an S3 bucket and an RDS Postgre
 1. If you want to delete these resources from AWS, run the script `./destroy_dev.sh`. If you have some files in you S3 bucket, the bucket won't be deleted. To delete the bucket with all of it's contents, run `./wipe_data.sh`
 
 ## Production
-Coming soon
+You can deploy the solution manually or completely autmatically, using the provided bash scripts and the CDK Stack.
+
+### Manual
+Following these instructions you can deploy the solution using only the AWS Console. Since it is very tedious and it takes approx. 3 hours, it is not recommended. It is provided for education purposes, or if you want to learn more about what the automated process is actually doing. You can find the instuctions in [MANUAL_DEPLOY.md](./MANUAL_DEPLOY.md).
+
+### Automatic
+To deploy to solution automatically, follow the steps below:
+
+1. Create an environment file in the root directory of this project, called .env.prod
+1. Fill in the following values:
+    - **AWS_ACCOUNT_ID**: ID of you AWS account. You can find it by following the instuctions [here](https://docs.aws.amazon.com/IAM/latest/UserGuide/console_account-alias.html#FindingYourAWSId).
+    - **GITHUB_TOKEN**: Personal GitHub access token for the API. To get one, follow the instructions [here](https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line). When creating it, check the following scopes: `public_repo` and `read:public_key`.
+    - **GITHUB_USER**: Your GitHub username.
+    - **DJANGO_USER**: Username that you will use to login to the Control Panel.
+    - **DJANGO_SUPERUSER_PASSWORD**: Password that you will use to login to the Control Panel.
+1. In the `scripts` folder, run:
+    ```
+    ./deploy_prod.sh [VERSION]
+    ```
+    VERSION corresponds to the new release tag that will be created on GitHub. It is recommended to use semantic versioning, like `v0.1.6`.
+1. Wait until the deploy process completes. It will take approximately 15 minutes. When the deploy script finishes, it will output the DNS if the EC2 instance where the Control Panel runs. To login, copy that address to your browser. Note that after the deploy script finishes, the GitHub Action will start, which will take an additional 15 minutes to finish. Until that completes, the Inference Engine will not work. 
+1. If you want to delete these resources from AWS, run the script `./destroy_dev.sh`. If you have some files in you S3 bucket, the bucket won't be deleted. To delete the bucket with all of it's contents, run `./wipe_data.sh`
+
