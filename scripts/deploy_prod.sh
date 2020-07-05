@@ -75,7 +75,7 @@ PG_CONN="postgresql://postgres:$(< $SCRIPT_PATH/variables/PG_PASS)@${postgresHos
 aws ssm put-parameter --name "PG_CONN" --value $PG_CONN --type "SecureString" > /dev/null
 echo "Postgres connection string created and saved to SSM parameter store."
 
-# Save postgres connection string as GitHub Action
+# Save postgres connection string as GitHub Secret
 python3 $SCRIPT_PATH/../utils/set_github_secret.py $GITHUB_TOKEN PG_CONN $PG_CONN
 
 # Remove PG_PASS file
